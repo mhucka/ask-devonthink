@@ -65,21 +65,21 @@ def main():
 
     # Loop through selections and print values ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    # FIXME handle custom metadata:
-    #   get it via custom_meta_data from Dt -- it comes back as json
-    #   let user specify "mdcitekey" & interpret it as custom field "citekey"
-    #   make sure to document that user has to look in Dt "identifier" to get correct field name
-    #     eg my "location" is actually "page" bc I renamed it at some point
-
     with_number = (len(selected_docs) > 1) and not no_numbers
     line_ending = chr(0) if print0 else '\n'
     for index, selected in enumerate(selected_docs):
+        custom_md = getattr(selected, 'custom_meta_data')()
         for field in fields:
-            if not hasattr(selected, field):
+            value = None
+            if custom_md and field in custom_md:
+                value = custom_md[field]
+            elif not hasattr(selected, field):
                 continue
-            attribute = getattr(selected, field)
-            if isinstance(attribute, appscript.reference.Reference):
-                value = attribute()
+            else:
+                attribute = getattr(selected, field, None)
+                if isinstance(attribute, appscript.reference.Reference):
+                    value = attribute()
+            if value:
                 prefix = f'{index}: ' if with_number else ''
                 print(f'{prefix}{value}', end = line_ending, flush = True)
 
@@ -89,18 +89,18 @@ def main():
 
 def parsed_arguments(options):
     # Sanity check the options given on the command line.
-    valid_options = [value for triple in options for value in triple[0:2]]
-    if any(arg.startswith('-') and arg not in valid_options for arg in sys.argv[1:]):
-        fatal(f'Unrecognized option in command line.')
+    valid_flags = [flag for option in options for flag in option[0:2]]
+    if any(arg.startswith('-') and arg not in valid_flags for arg in sys.argv[1:]):
+        fatal(f'Unrecognized option supplied on command line.')
 
     # Construct True/False liste based on whether corresponding option is given.
     values = []
-    for index, opt in enumerate(options):
+    for index, option in enumerate(options):
         # True if the arg is in argv, in the order the arg appears in options.
-        opt_present = any(arg in [opt[0], opt[1]] for arg in sys.argv[1:])
-        values.append(opt_present)
+        flag_present = any(arg in [option[0], option[1]] for arg in sys.argv[1:])
+        values.append(flag_present)
 
-    # Values that are not recognized as options are assumed to be field names.
+    # Values unrecognized as options are assumed to be metadata field names.
     fields = [arg for arg in sys.argv[1:] if not arg.startswith('-')]
     return values + ([fields] if fields else [None])
 
